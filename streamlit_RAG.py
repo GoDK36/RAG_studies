@@ -163,10 +163,18 @@ def get_vectorstore(text_chunks):
     return docsearch
 
 def get_conversation_chain(docsearch, gemini_api_key):
+        
+    template = """Answer the question as based only on the following context:
+    {context}
+
+    Question: {question}
+    """
+    
     gemini = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=gemini_api_key, temperature = 0)
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=gemini,
-        chain_type="stuff", 
+        chain_type="stuff",
+        condense_question_prompt=ChatPromptTemplate.from_template(template),
         retriever=docsearch.as_retriever(
                                     search_type="mmr",
                                     search_kwargs={'k':3, 'fetch_k': 10},
@@ -176,12 +184,7 @@ def get_conversation_chain(docsearch, gemini_api_key):
         return_source_documents = True,
         verbose=True
         )
-    
-    # template = """Answer the question as based only on the following context:
-    # {context}
 
-    # Question: {question}
-    # """
 
     # prompt = ChatPromptTemplate.from_template(template)
 
