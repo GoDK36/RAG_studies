@@ -27,7 +27,7 @@ from langchain.memory import ConversationBufferWindowMemory
 from langchain.vectorstores import Chroma
 
 # from streamlit_chat import message
-from langchain.callbacks import get_gemini_callback
+from langchain.callbacks import get_openai_callback
 from langchain.memory import StreamlitChatMessageHistory
 
 
@@ -90,7 +90,7 @@ def main():
 
             with st.spinner("Thinking..."):
                 result = chain({"question": query})
-                with get_gemini_callback() as cb:
+                with get_openai_callback() as cb:
                     st.session_state.chat_history = result['chat_history']
                 response = result['answer']
                 source_documents = result['source_documents']
@@ -169,7 +169,7 @@ def get_conversation_chain(docsearch, gemini_api_key):
 
     Question: {question}
     """
-    
+
     gemini = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=gemini_api_key, temperature = 0)
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=gemini,
