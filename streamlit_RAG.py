@@ -89,10 +89,10 @@ def main():
         with st.chat_message("assistant"):
 
             chain = st.session_state.conversation
+            st.markdown(chain)
 
             with st.spinner("Thinking..."):
                 result = chain({"question": query})
-                st.markdown(result)
                 with get_openai_callback() as cb:
                     st.session_state.chat_history = result['chat_history']
                 response = result['answer']
