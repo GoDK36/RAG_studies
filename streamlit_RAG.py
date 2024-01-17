@@ -65,6 +65,9 @@ def main():
 
         st.session_state.conversation = get_conversation_chain(vectorestore, gemini_api_key)
 
+        # st.session_state.conversation = get_conversation_chain(vectorestore, gemini_api_key)
+        # st.write(st.session_state.conversation)
+
         st.session_state.processComplete = True
 
     if 'messages' not in st.session_state:
@@ -80,6 +83,7 @@ def main():
 
     # Chat logic
     if query := st.chat_input("질문을 입력해주세요."):
+        print(query)
         st.session_state.messages.append({"role": "user",
                                           "content" : query})
         
@@ -89,20 +93,24 @@ def main():
         with st.chat_message("assistant"):
 
             chain = st.session_state.conversation
-            st.markdown(chain)
+            # chain = get_conversation_chain(vectorestore, gemini_api_key)
 
             with st.spinner("Thinking..."):
-                result = chain({"question": query})
-                with get_openai_callback() as cb:
-                    st.session_state.chat_history = result['chat_history']
-                response = result['answer']
-                source_documents = result['source_documents']
+                result = chain.invoke({'question':query})
+                # # with get_openai_callback() as cb:
+                # st.session_state.chat_history = result.chat_history
+                # response = result.content
+                # source_documents = result.source_documents
+                # st.session_state.chat_history = result.chat_history
+                response = result.content
+                # source_documents = result.source_documents
 
                 st.markdown(response)
+                source_documents = get_source(vectorestore, query)
                 with st.expander("참고 문서 확인"):
-                    st.markdown(source_documents[0].metadata['source'], help=source_documents[0].page_content)          # help를 붙이면 ?아이콘 생김 -> 마우스 대면 원하는 글이 뜸
-                    st.markdown(source_documents[1].metadata['source'], help=source_documents[1].page_content)
-                    st.markdown(source_documents[2].metadata['source'], help=source_documents[2].page_content)
+                    st.markdown(f"출처: {source_documents[0].metadata['source']}의 {source_documents[0].metadata['page']} 페이지", help=source_documents[0].page_content)          # help를 붙이면 ?아이콘 생김 -> 마우스 대면 원하는 글이 뜸
+                    st.markdown(f"출처: {source_documents[0].metadata['source']}의 {source_documents[0].metadata['page']} 페이지", help=source_documents[1].page_content)
+                    st.markdown(f"출처: {source_documents[0].metadata['source']}의 {source_documents[0].metadata['page']} 페이지", help=source_documents[2].page_content)
                 
         st.session_state.messages.append({'role': "assistant",
                                           "content": response})
@@ -155,13 +163,29 @@ def get_text_chunks(text):
     return chunks
 
 def get_vectorstore(text_chunks):
-    embeddings = HuggingFaceEmbeddings(
-        model_name="jhgan/ko-sroberta-multitask",
-        model_kwargs={'device': "cpu"},
-        encode_kwarges={'normalize_embeddings':True}
+
+    model_name = "jhgan/ko-sroberta-multitask"
+    model_kwargs = {'device': 'cpu'}
+    encode_kwargs = {'normalize_embeddings': True}
+    hf = HuggingFaceEmbeddings(
+        model_name=model_name,
+        model_kwargs=model_kwargs,
+        encode_kwargs=encode_kwargs
     )
+
     # vectordb = FAISS.from_documents(text_chunks, embeddings)
-    docsearch = Chroma.from_documents(text_chunks, embeddings)
+    docsearch = Chroma.from_documents(text_chunks, hf)
+
+    return docsearch
+
+def get_source(docsearch, query):
+
+    retriever=docsearch.as_retriever(
+                                    search_type="mmr",
+                                    search_kwargs={'k':3, 'fetch_k': 10},
+                                    # vervose=True
+                                    )
+    source = retriever.get_relevant_documents(query)
 
     return docsearch
 
@@ -193,7 +217,8 @@ def get_conversation_chain(docsearch, gemini_api_key):
     retriever=docsearch.as_retriever(
                                     search_type="mmr",
                                     # search_kwargs={'k':3, 'fetch_k': 10},
-                                    vervose=True),
+                                    vervose=True)
+    retriever.get_relevant_documents("LGG에 대해서 설명해줘")
     conversation_chain = RunnableMap({
         "context": lambda x: retriever.get_relevant_documents(x['question']),
         "question": lambda x: x['question']
