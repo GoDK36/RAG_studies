@@ -92,7 +92,7 @@ def main():
 
             with st.spinner("Thinking..."):
                 result = chain({"question": query})
-                print(result)
+                st.markdown(result)
                 with get_openai_callback() as cb:
                     st.session_state.chat_history = result['chat_history']
                 response = result['answer']
