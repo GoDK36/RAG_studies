@@ -92,6 +92,7 @@ def main():
 
             with st.spinner("Thinking..."):
                 result = chain({"question": query})
+                print(result)
                 with get_openai_callback() as cb:
                     st.session_state.chat_history = result['chat_history']
                 response = result['answer']
@@ -173,27 +174,30 @@ def get_conversation_chain(docsearch, gemini_api_key):
     """
 
     gemini = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=gemini_api_key, temperature = 0)
-    conversation_chain = ConversationalRetrievalChain.from_llm(
-        llm=gemini,
-        chain_type="stuff",
-        condense_question_prompt=ChatPromptTemplate.from_template(template),
-        retriever=docsearch.as_retriever(
+    # conversation_chain = ConversationalRetrievalChain.from_llm(
+    #     llm=gemini,
+    #     chain_type="stuff",
+    #     condense_question_prompt=ChatPromptTemplate.from_template(template),
+    #     retriever=docsearch.as_retriever(
+    #                                 search_type="mmr",
+    #                                 # search_kwargs={'k':3, 'fetch_k': 10},
+    #                                 vervose=True),
+    #     memory=ConversationBufferWindowMemory(memory_key='chat_history', return_messages=True, output_key='answer'),      # 'chat history라는 키 값을 가져와 기억함
+    #     get_chat_history = lambda h: h,     # 메모리가 들어온 그대로 chat history로 보낸다
+    #     return_source_documents = True,
+    #     verbose=True
+    #     )
+
+
+    prompt = ChatPromptTemplate.from_template(template)
+    retriever=docsearch.as_retriever(
                                     search_type="mmr",
                                     # search_kwargs={'k':3, 'fetch_k': 10},
                                     vervose=True),
-        memory=ConversationBufferWindowMemory(memory_key='chat_history', return_messages=True, output_key='answer'),      # 'chat history라는 키 값을 가져와 기억함
-        get_chat_history = lambda h: h,     # 메모리가 들어온 그대로 chat history로 보낸다
-        return_source_documents = True,
-        verbose=True
-        )
-
-
-    # prompt = ChatPromptTemplate.from_template(template)
-
-    # chain = RunnableMap({
-    #     "context": lambda x: retriever.get_relevant_documents(x['question']),
-    #     "question": lambda x: x['question']
-    # }) | prompt | gemini
+    conversation_chain = RunnableMap({
+        "context": lambda x: retriever.get_relevant_documents(x['question']),
+        "question": lambda x: x['question']
+    }) | prompt | gemini
 
     return conversation_chain
 
