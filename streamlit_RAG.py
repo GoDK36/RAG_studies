@@ -65,6 +65,8 @@ def main():
 
         st.session_state.conversation = get_conversation_chain(vectorestore, gemini_api_key)
 
+        st.session_state.processComplete = True
+
     if 'messages' not in st.session_state:
         st.session_state['messages'] = [{'role' : 'assistant',
                                          "content" : "안녕하세요! 주어진 문서에 대해 궁금하신 것이 있으면 언제든 물어봐주세요!"}]
@@ -177,7 +179,7 @@ def get_conversation_chain(docsearch, gemini_api_key):
         condense_question_prompt=ChatPromptTemplate.from_template(template),
         retriever=docsearch.as_retriever(
                                     search_type="mmr",
-                                    search_kwargs={'k':3, 'fetch_k': 10},
+                                    # search_kwargs={'k':3, 'fetch_k': 10},
                                     vervose=True),
         memory=ConversationBufferWindowMemory(memory_key='chat_history', return_messages=True, output_key='answer'),      # 'chat history라는 키 값을 가져와 기억함
         get_chat_history = lambda h: h,     # 메모리가 들어온 그대로 chat history로 보낸다
