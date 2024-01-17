@@ -7,7 +7,8 @@ from loguru import logger
 ## 메모리를 가진 체인이 필요
 from langchain.chains import ConversationalRetrievalChain
 ## llm은 gemini꺼
-from langchain.chat_models import Chatgemini
+# from langchain.chat_models import Chatgemini
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 ## 여러 유형의 문서를 이해하기위한 라이브러리(PDF, DOC, PPT)
 from langchain.document_loaders import PyPDFLoader
@@ -22,12 +23,16 @@ from langchain.embeddings import HuggingFaceEmbeddings
 ## 몇개까지의 대화를 메모리를 넣어줄지 정하기
 from langchain.memory import ConversationBufferWindowMemory
 ## 벡터로 저장하기 위한 라이브러리
-from langchain.vectorstores import FAISS
+# from langchain.vectorstores import FAISS
+from langchain.vectorstores import Chroma
 
 # from streamlit_chat import message
 from langchain.callbacks import get_gemini_callback
 from langchain.memory import StreamlitChatMessageHistory
 
+
+from langchain.prompts import ChatPromptTemplate
+from langchain.schema.runnable import RunnableMap
 
 # 메인 함수
 def main():
@@ -139,7 +144,7 @@ def get_text(docs):
 
 def get_text_chunks(text):
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size = 900,
+        chunk_size = 1000,
         chunk_overlap=100,
         length_function=tiktoken_len
     )
@@ -152,20 +157,38 @@ def get_vectorstore(text_chunks):
         model_kwargs={'device': "cpu"},
         encode_kwarges={'normalize_embeddings':True}
     )
-    vectordb = FAISS.from_documents(text_chunks, embeddings)
-    return vectordb
+    # vectordb = FAISS.from_documents(text_chunks, embeddings)
+    docsearch = Chroma.from_documents(text_chunks, embeddings)
 
-def get_conversation_chain(vectorstore, gemini_api_key):
-    llm = Chatgemini(gemini_api_key=gemini_api_key, model_name="gpt-3.5-turbo", temperature=0)
+    return docsearch
+
+def get_conversation_chain(docsearch, gemini_api_key):
+    gemini = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=gemini_api_key, temperature = 0)
     conversation_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,
+        llm=gemini,
         chain_type="stuff", 
-        retriever=vectorstore.as_retriever(search_type='mmr', vervose=True),
+        retriever=docsearch.as_retriever(
+                                    search_type="mmr",
+                                    search_kwargs={'k':3, 'fetch_k': 10},
+                                    vervose=True),
         memory=ConversationBufferWindowMemory(memory_key='chat_history', return_messages=True, output_key='answer'),      # 'chat history라는 키 값을 가져와 기억함
         get_chat_history = lambda h: h,     # 메모리가 들어온 그대로 chat history로 보낸다
         return_source_documents = True,
         verbose=True
         )
+    
+    # template = """Answer the question as based only on the following context:
+    # {context}
+
+    # Question: {question}
+    # """
+
+    # prompt = ChatPromptTemplate.from_template(template)
+
+    # chain = RunnableMap({
+    #     "context": lambda x: retriever.get_relevant_documents(x['question']),
+    #     "question": lambda x: x['question']
+    # }) | prompt | gemini
 
     return conversation_chain
 
