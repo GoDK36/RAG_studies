@@ -1,14 +1,16 @@
 import streamlit as st
+## streamlit에서 행한 행동이 로그로 남게 하기 위한 라이브러리
+from loguru import logger
+
 ## 토큰 개수를 세기위한 라이브러리
 import tiktoken
-## stream에서 행한 행동이 로그로 남게 하기 위한 라이브러리
-from loguru import logger
+
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 ## 메모리를 가진 체인이 필요
 from langchain.chains import ConversationalRetrievalChain
-## llm은 gemini꺼
-# from langchain.chat_models import Chatgemini
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
 
 ## 여러 유형의 문서를 이해하기위한 라이브러리(PDF, DOC, PPT)
 from langchain.document_loaders import PyPDFLoader
@@ -20,22 +22,22 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 ## 허깅페이스를 사용한 임베딩
 from langchain.embeddings import HuggingFaceEmbeddings
 
-## 몇개까지의 대화를 메모리를 넣어줄지 정하기
-from langchain.memory import ConversationBufferWindowMemory
 ## 벡터로 저장하기 위한 라이브러리
 # from langchain.vectorstores import FAISS
 from langchain.vectorstores import Chroma
 
-# from streamlit_chat import message
-from langchain.callbacks import get_openai_callback
-from langchain.memory import StreamlitChatMessageHistory
-
-
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema.runnable import RunnableMap
 
-# from IPython.display import display
-# from IPython.display import Markdown
+## 몇개까지의 대화를 메모리를 넣어줄지 정하기
+from langchain.memory import ConversationBufferMemory
+from langchain.memory import StreamlitChatMessageHistory
+
+
+# result = llm.invoke("gemini-pro를 활용한 챗봇 만드는 파이썬 코드 작성해줘")
+# print(result.content)
+
+## 스티림릿
 
 # 메인 함수
 def main():
@@ -52,26 +54,37 @@ def main():
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
+        
+    if "chat_disabled" not in st.session_state:
+        st.session_state.chat_disabled = True
 
     with st.sidebar:
         uploaded_files = st.file_uploader("UPload your file", type=["pdf", 'docx', 'pptx'], accept_multiple_files=True)
-        gemini_api_key = st.text_input("GEMINI API Key", key="chatbot_api_key", type="password")
+        gemini_api_key = st.text_input("GEMINI API Key", key="chatbot_api_key", type="password", help = "발급방법: https://godcode.tistory.com/35")
+        # with st.expander("gemini api key 발급받는 방법"):
+        #     st.markdown("gemini api key 발급받는 방법", help = "https://godcode.tistory.com/35")
         process = st.button("Process")
 
     if process:
         if not gemini_api_key:
             st.info("Please add your gemini API key to continue.")
             st.stop()
-        files_text = get_text(uploaded_files)
-        text_chunks = get_text_chunks(files_text)
-        vectorestore = get_vectorstore(text_chunks)
+        with st.sidebar:
+            with st.spinner("데이터 벡터화 중..."):
+                files_text = get_text(uploaded_files)
+                text_chunks = get_text_chunks(files_text)
+                vectorestore = get_vectorstore(text_chunks)
+
+            st.success("데이터 벡터화 완료!")
 
         st.session_state.conversation = get_conversation_chain(vectorestore, gemini_api_key)
 
-        # st.session_state.conversation = get_conversation_chain(vectorestore, gemini_api_key)
-        # st.write(st.session_state.conversation)
-
         st.session_state.processComplete = True
+
+        with st.sidebar:
+            st.success("제미니 불러오기 완료!")
+        
+        st.session_state.chat_disabled = False
 
     if 'messages' not in st.session_state:
         st.session_state['messages'] = [{'role' : 'assistant',
@@ -85,39 +98,53 @@ def main():
     history = StreamlitChatMessageHistory(key="chat_messages")
 
     # Chat logic
-    if query := st.chat_input("질문을 입력해주세요."):
-        print(query)
-        st.session_state.messages.append({"role": "user",
+    if st.session_state.chat_disabled:
+        if query := st.chat_input("제미니가 도착할때까지 좀만 기다려주세요...", disabled=st.session_state.chat_disabled):
+            st.session_state.messages.append({"role": "user",
                                           "content" : query})
         
-        with st.chat_message("user"):
-            st.markdown(query)
+            with st.chat_message("user"):
+                st.markdown(query)
+    else:
+        if query := st.chat_input("질문을 입력해주세요.", disabled=st.session_state.chat_disabled):
+            # prompt = """Answer the question as based only on the following context:
+            # {context}
 
-        with st.chat_message("assistant"):
+            # Question: {query}
+            # """
+            # prompt = PromptTemplate(
+            #     input_variables = ['contents', 'query'], 
+            #     template = prompt
+            # )
+            st.session_state.messages.append({"role": "user",
+                                            "content" : query})
+            
+            with st.chat_message("user"):
+                st.markdown(query)
 
-            chain = st.session_state.conversation
-            # chain = get_conversation_chain(vectorestore, gemini_api_key)
+            with st.chat_message("assistant"):
 
-            with st.spinner("Thinking..."):
-                result = chain.invoke({'question':query})
-                # # with get_openai_callback() as cb:
-                # st.session_state.chat_history = result.chat_history
-                # response = result.content
-                # source_documents = result.source_documents
-                # st.session_state.chat_history = result.chat_history
-                response = result.content
-                # source_documents = result.source_documents
+                chain = st.session_state.conversation
+
+                with st.spinner("답을 고민 중입니당..."):
+                    # chain.run() 
+                    result = chain({"question": query})
+                    st.write(result)
+                    # with get_openai_callback() as cb:
+                    st.session_state.chat_history = result['chat_history']
+                    response = result['answer']
+                    source_documents = result['source_documents']
 
                 st.markdown(response)
-                source_documents = get_source(vectorestore, query)
                 with st.expander("참고 문서 확인"):
                     st.markdown(f"출처: {source_documents[0].metadata['source']}의 {source_documents[0].metadata['page']} 페이지", help=source_documents[0].page_content)          # help를 붙이면 ?아이콘 생김 -> 마우스 대면 원하는 글이 뜸
                     st.markdown(f"출처: {source_documents[0].metadata['source']}의 {source_documents[0].metadata['page']} 페이지", help=source_documents[1].page_content)
                     st.markdown(f"출처: {source_documents[0].metadata['source']}의 {source_documents[0].metadata['page']} 페이지", help=source_documents[2].page_content)
-                
-        st.session_state.messages.append({'role': "assistant",
-                                          "content": response})
-        
+                    
+
+
+    # Add assistant message to chat history
+            st.session_state.messages.append({"role": "assistant", "content": response})
 
 
 
@@ -129,9 +156,6 @@ def tiktoken_len(text):
 
     return len(tokens)
 
-# def to_markdown(text):
-#   text = text.replace('•', '  *')
-#   return Markdown(textwrap.indent(text, '> ', predicate=lambda _: True))
 
 def get_text(docs):
 
@@ -185,53 +209,25 @@ def get_vectorstore(text_chunks):
 
     return docsearch
 
-def get_source(docsearch, query):
 
-    retriever=docsearch.as_retriever(
-                                    search_type="mmr",
-                                    search_kwargs={'k':3, 'fetch_k': 10},
-                                    # vervose=True
-                                    )
-    source = retriever.get_relevant_documents(query)
+def get_conversation_chain(vetorestore, gemini_api_key):
+    
+    # AIzaSyA68zlB0xPV1LRqx04UGB_13Mn51LmKeUo
+    gemini = ChatGoogleGenerativeAI(model='gemini-pro', google_api_key=gemini_api_key, temperature=0, convert_system_message_to_human=True)
 
-    return docsearch
-
-def get_conversation_chain(docsearch, gemini_api_key):
-        
-    template = """Answer the question as based only on the following context:
-    {context}
-
-    Question: {question}
-    """
-
-    gemini = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=gemini_api_key, temperature = 0)
-    # conversation_chain = ConversationalRetrievalChain.from_llm(
-    #     llm=gemini,
-    #     chain_type="stuff",
-    #     condense_question_prompt=ChatPromptTemplate.from_template(template),
-    #     retriever=docsearch.as_retriever(
-    #                                 search_type="mmr",
-    #                                 # search_kwargs={'k':3, 'fetch_k': 10},
-    #                                 vervose=True),
-    #     memory=ConversationBufferWindowMemory(memory_key='chat_history', return_messages=True, output_key='answer'),      # 'chat history라는 키 값을 가져와 기억함
-    #     get_chat_history = lambda h: h,     # 메모리가 들어온 그대로 chat history로 보낸다
-    #     return_source_documents = True,
-    #     verbose=True
-    #     )
-
-
-    prompt = ChatPromptTemplate.from_template(template)
-    retriever=docsearch.as_retriever(
-                                    search_type="mmr",
-                                    # search_kwargs={'k':3, 'fetch_k': 10},
-                                    vervose=True)
-    retriever.get_relevant_documents("LGG에 대해서 설명해줘")
-    conversation_chain = RunnableMap({
-        "context": lambda x: retriever.get_relevant_documents(x['question']),
-        "question": lambda x: x['question']
-    }) | prompt | gemini
+    conversation_chain = ConversationalRetrievalChain.from_llm(
+            llm=gemini, 
+            chain_type="stuff", 
+            retriever=vetorestore.as_retriever(search_type="mmr", vervose=True),
+            memory=ConversationBufferMemory(memory_key='chat_history', return_messages=True, output_key='answer'),
+            get_chat_history=lambda h: h,
+            return_source_documents=True,
+            verbose = True
+        )
 
     return conversation_chain
+
+
 
 if __name__ == "__main__":
     main()
