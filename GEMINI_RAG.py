@@ -212,7 +212,7 @@ def get_vectorstore(text_chunks):
 
 def get_conversation_chain(vetorestore, gemini_api_key):
     
-    # AIzaSyA68zlB0xPV1LRqx04UGB_13Mn51LmKeUo
+    
     gemini = ChatGoogleGenerativeAI(model='gemini-pro', google_api_key=gemini_api_key, temperature=0, convert_system_message_to_human=True)
 
     conversation_chain = ConversationalRetrievalChain.from_llm(
