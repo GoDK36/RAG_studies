@@ -9,6 +9,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 ## 메모리를 가진 체인이 필요
 from langchain.chains import ConversationalRetrievalChain
+from langchain.chains.question_answering import load_qa_chain
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 
@@ -58,6 +59,9 @@ def main():
     if "chat_disabled" not in st.session_state:
         st.session_state.chat_disabled = True
 
+    if "retrieval" not in st.session_state:
+        st.session_state.retrieval = None
+
     with st.sidebar:
         uploaded_files = st.file_uploader("UPload your file", type=["pdf", 'docx', 'pptx'], accept_multiple_files=True)
         gemini_api_key = st.text_input("GEMINI API Key", key="chatbot_api_key", type="password", help = "발급방법: https://godcode.tistory.com/35")
@@ -70,15 +74,17 @@ def main():
             st.info("Please add your gemini API key to continue.")
             st.stop()
         with st.sidebar:
-            with st.spinner("데이터 벡터화 중..."):
-                files_text = get_text(uploaded_files)
-                text_chunks = get_text_chunks(files_text)
-                vectorestore = get_vectorstore(text_chunks)
+            with st.empty():
+                with st.spinner("데이터 벡터화 중..."):
+                    files_text = get_text(uploaded_files)
+                    text_chunks = get_text_chunks(files_text)
+                    vectorestore = get_vectorstore(text_chunks)
+                    st.session_state.retrieval = vectorestore
 
-            st.success("데이터 벡터화 완료!")
 
-        st.session_state.conversation = get_conversation_chain(vectorestore, gemini_api_key)
+                st.success("데이터 벡터화 완료!")
 
+        st.session_state.conversation = get_conversation_chain(gemini_api_key)
         st.session_state.processComplete = True
 
         with st.sidebar:
@@ -95,7 +101,7 @@ def main():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    history = StreamlitChatMessageHistory(key="chat_messages")
+    chat_history = StreamlitChatMessageHistory(key="chat_message")
 
     # Chat logic
     if st.session_state.chat_disabled:
@@ -128,18 +134,18 @@ def main():
 
                 with st.spinner("답을 고민 중입니당..."):
                     # chain.run() 
-                    result = chain({"question": query})
-                    st.write(result)
+                    result = chain({'input_documents':st.session_state.retrieval.get_relevant_documents(query), "question": query})
+                    print(result)
                     # with get_openai_callback() as cb:
-                    st.session_state.chat_history = result['chat_history']
-                    response = result['answer']
-                    source_documents = result['source_documents']
+                    # st.session_state.chat_history = result['chat_history']
+                    response = result['output_text']
+                    source_documents = result['input_documents']
 
                 st.markdown(response)
                 with st.expander("참고 문서 확인"):
                     st.markdown(f"출처: {source_documents[0].metadata['source']}의 {source_documents[0].metadata['page']} 페이지", help=source_documents[0].page_content)          # help를 붙이면 ?아이콘 생김 -> 마우스 대면 원하는 글이 뜸
-                    st.markdown(f"출처: {source_documents[0].metadata['source']}의 {source_documents[0].metadata['page']} 페이지", help=source_documents[1].page_content)
-                    st.markdown(f"출처: {source_documents[0].metadata['source']}의 {source_documents[0].metadata['page']} 페이지", help=source_documents[2].page_content)
+                    st.markdown(f"출처: {source_documents[1].metadata['source']}의 {source_documents[1].metadata['page']} 페이지", help=source_documents[1].page_content)
+                    st.markdown(f"출처: {source_documents[2].metadata['source']}의 {source_documents[2].metadata['page']} 페이지", help=source_documents[2].page_content)
                     
 
 
@@ -205,24 +211,52 @@ def get_vectorstore(text_chunks):
     )
 
     # vectordb = FAISS.from_documents(text_chunks, embeddings)
-    docsearch = Chroma.from_documents(text_chunks, hf)
+    docsearch = Chroma.from_documents(text_chunks, hf).as_retriever(search_type="mmr", search_kwargs={'k':3, 'fetch_k': 10})
 
     return docsearch
 
 
-def get_conversation_chain(vetorestore, gemini_api_key):
-    
+def get_conversation_chain(gemini_api_key):
     
     gemini = ChatGoogleGenerativeAI(model='gemini-pro', google_api_key=gemini_api_key, temperature=0, convert_system_message_to_human=True)
 
-    conversation_chain = ConversationalRetrievalChain.from_llm(
-            llm=gemini, 
-            chain_type="stuff", 
-            retriever=vetorestore.as_retriever(search_type="mmr", vervose=True),
-            memory=ConversationBufferMemory(memory_key='chat_history', return_messages=True, output_key='answer'),
-            get_chat_history=lambda h: h,
-            return_source_documents=True,
-            verbose = True
+    # prompt
+
+    # _template = """Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question in the original language, either Korean or English.
+
+    # Chat History:
+    # {chat_history}
+    # Follow Up Input: {question}
+    # Standalone question:"""
+    # KOEN_CONDENSE_QUESTION_PROMPT = PromptTemplate.from_template(_template)
+
+    prompt_template = """Use the following context when answering the question. If you don't know the answer, say you don't know instead of trying to make it up. Answer question in its origin language, either Korean or English.
+    
+
+    {context}
+
+    Question: {question}
+    Helpful Answer:"""
+    KOEN_QA_PROMPT = PromptTemplate(
+        template=prompt_template, input_variables=["context", "question"]
+    )
+
+
+    # conversation_chain = ConversationalRetrievalChain.from_llm(
+    #         llm=gemini, 
+    #         chain_type="stuff", 
+    #         retriever=vectorstore.as_retriever(search_type="mmr", vervose=True),
+    #         # condense_question_prompt=KOEN_QA_PROMPT,
+    #         memory=ConversationBufferMemory(memory_key='chat_history', return_messages=True, output_key='answer'),
+    #         get_chat_history=lambda h: h,
+    #         return_source_documents=True,
+    #         verbose = True
+    #     )
+
+    conversation_chain = load_qa_chain(
+        llm=gemini, 
+        chain_type="stuff", 
+        prompt=KOEN_QA_PROMPT
         )
 
     return conversation_chain
