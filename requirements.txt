@@ -1,4 +1,6 @@
 pysqlite3-binary
+google-generativeai
+langchain-google-genai
 langchain
 chromadb==0.3.29
 unstructured
