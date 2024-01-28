@@ -8,7 +8,7 @@ import tiktoken
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 ## 메모리를 가진 체인이 필요
-from langchain.chains import ConversationalRetrievalChain
+from langchain.chains import ConversationalRetrievalChain, RetrievalQA
 from langchain.chains.question_answering import load_qa_chain
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
@@ -79,12 +79,12 @@ def main():
                     files_text = get_text(uploaded_files)
                     text_chunks = get_text_chunks(files_text)
                     vectorestore = get_vectorstore(text_chunks)
-                    st.session_state.retrieval = vectorestore
+                    # st.session_state.retrieval = vectorestore
 
 
                 st.success("데이터 벡터화 완료!")
 
-        st.session_state.conversation = get_conversation_chain(gemini_api_key)
+        st.session_state.conversation = get_conversation_chain(gemini_api_key, vector_index=vectorestore)
         st.session_state.processComplete = True
 
         with st.sidebar:
@@ -113,15 +113,6 @@ def main():
                 st.markdown(query)
     else:
         if query := st.chat_input("질문을 입력해주세요.", disabled=st.session_state.chat_disabled):
-            # prompt = """Answer the question as based only on the following context:
-            # {context}
-
-            # Question: {query}
-            # """
-            # prompt = PromptTemplate(
-            #     input_variables = ['contents', 'query'], 
-            #     template = prompt
-            # )
             st.session_state.messages.append({"role": "user",
                                             "content" : query})
             
@@ -134,12 +125,12 @@ def main():
 
                 with st.spinner("답을 고민 중입니당..."):
                     # chain.run() 
-                    result = chain({'input_documents':st.session_state.retrieval.get_relevant_documents(query), "question": query})
+                    result = chain({'retriever':st.session_state.retrieval, "query": query})
                     print(result)
                     # with get_openai_callback() as cb:
                     # st.session_state.chat_history = result['chat_history']
-                    response = result['output_text']
-                    source_documents = result['input_documents']
+                    response = result['result']
+                    source_documents = result['source_documents']
 
                 st.markdown(response)
                 with st.expander("참고 문서 확인"):
@@ -216,9 +207,9 @@ def get_vectorstore(text_chunks):
     return docsearch
 
 
-def get_conversation_chain(gemini_api_key):
+def get_conversation_chain(gemini_api_key, vector_index):
     
-    gemini = ChatGoogleGenerativeAI(model='gemini-pro', google_api_key=gemini_api_key, temperature=0, convert_system_message_to_human=True)
+    gemini = ChatGoogleGenerativeAI(model='gemini-pro', google_api_key=gemini_api_key, temperature=0.1, convert_system_message_to_human=True)
 
     # prompt
 
@@ -230,10 +221,11 @@ def get_conversation_chain(gemini_api_key):
     # Standalone question:"""
     # KOEN_CONDENSE_QUESTION_PROMPT = PromptTemplate.from_template(_template)
 
-    prompt_template = """Use the following context when answering the question. If you don't know the answer, say you don't know instead of trying to make it up. Answer question in its origin language, either Korean or English.
+    prompt_template = """Use the following context when answering the question. If you don't know the answer, reply to the "Following Text" in the header and answer to the best of your knowledge, or if you do know the answer, answer without the "Following Text". Answer question in its origin language, either Korean or English.
     
-
-    {context}
+    Following Text: "주어진 정보에서 답변을 찾지는 못했지만, 제가 아는 선에서 답을 말씀드려볼게요! **틀릴 수도 있으니 교차검증은 필수입니다!**"
+    
+    following context: {context}
 
     Question: {question}
     Helpful Answer:"""
@@ -253,11 +245,19 @@ def get_conversation_chain(gemini_api_key):
     #         verbose = True
     #     )
 
-    conversation_chain = load_qa_chain(
-        llm=gemini, 
-        chain_type="stuff", 
-        prompt=KOEN_QA_PROMPT
-        )
+    # conversation_chain = load_qa_chain(
+    #     llm=gemini, 
+    #     chain_type="stuff", 
+    #     prompt=KOEN_QA_PROMPT
+    #     )
+    
+    
+    conversation_chain = RetrievalQA.from_chain_type(
+        gemini,
+        retriever=vector_index,
+        return_source_documents=True,
+        chain_type_kwargs={"prompt": KOEN_QA_PROMPT}
+    )
 
     return conversation_chain
 
