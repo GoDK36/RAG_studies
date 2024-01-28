@@ -2,6 +2,9 @@ import streamlit as st
 ## streamlit에서 행한 행동이 로그로 남게 하기 위한 라이브러리
 from loguru import logger
 
+import sys
+sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+
 ## 토큰 개수를 세기위한 라이브러리
 import tiktoken
 
