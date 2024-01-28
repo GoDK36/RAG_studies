@@ -1,6 +1,6 @@
 pysqlite3-binary
 langchain
-chromadb
+chromadb==0.3.29
 unstructured
 sentence-transformers
 tiktoken
