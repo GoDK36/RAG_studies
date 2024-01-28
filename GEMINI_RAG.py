@@ -221,7 +221,7 @@ def get_conversation_chain(gemini_api_key, vector_index):
     # Standalone question:"""
     # KOEN_CONDENSE_QUESTION_PROMPT = PromptTemplate.from_template(_template)
 
-    prompt_template = """Use the following context when answering the question. If you don't know the answer, reply to the "Following Text" in the header and answer to the best of your knowledge, or if you do know the answer, answer without the "Following Text". Answer question in its origin language, either Korean or English.
+    prompt_template = """Use the following context when answering the question. If you don't know the answer, reply to the "Following Text" in the header and answer to the best of your knowledge, or if you do know the answer, answer without the "Following Text". If a question is asked in Korean, translate it to English and always answer in Korean.
     
     Following Text: "주어진 정보에서 답변을 찾지는 못했지만, 제가 아는 선에서 답을 말씀드려볼게요! **틀릴 수도 있으니 교차검증은 필수입니다!**"
     
