@@ -11,9 +11,7 @@ import tiktoken
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 ## 메모리를 가진 체인이 필요
-from langchain.chains import ConversationalRetrievalChain, RetrievalQA
-from langchain.chains.question_answering import load_qa_chain
-from langchain.chains import LLMChain
+from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 
 ## 여러 유형의 문서를 이해하기위한 라이브러리(PDF, DOC, PPT)
@@ -31,7 +29,6 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import Chroma
 
 from langchain.prompts import ChatPromptTemplate
-from langchain.schema.runnable import RunnableMap
 
 ## 몇개까지의 대화를 메모리를 넣어줄지 정하기
 from langchain.memory import ConversationBufferMemory
