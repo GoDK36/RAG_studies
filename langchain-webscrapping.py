@@ -7,7 +7,8 @@ from langchain.chains import create_extraction_chain
 # from langchain_community import LLMChain
 # from langchain.prompts import PromptTemplate
 # from langchain_community.llms import huggingface_pipeline
-from langchain_community.llms import huggingface_hub
+# from langchain_community.llms import huggingface_hub
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 
 def scrape_with_playwright(urls, extraction_chain):
@@ -32,7 +33,7 @@ def scrape_with_playwright(urls, extraction_chain):
     # 스플릿을 순회하며 schema 에 따라 내용 추출
     for split in splits:
         # 각 스플릿에 대하여 스키마 기반 내용 추출
-        extracted_content = extraction_chain.run(split.page_content)
+        extracted_content = extraction_chain.invoke(split.page_content)
         extracted_contents.extend(extracted_content)
         
     return extracted_contents
@@ -47,24 +48,25 @@ schema = {
     "required": ["뉴스기사_제목", "뉴스기사_카테고리", "뉴스기사_키워드"],
 }
 
-os.environ['HUGGINGFACEHUB_API_TOKEN'] = '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'
-os.environ['HF_HOME'] = r'D:\Shin\NLP\models\HuggingFace Models'
+
+# os.environ['HF_HOME'] = r'D:\Shin\NLP\models\HuggingFace Models'
 
 # HuggingFace Model ID
-model_id = 'beomi/KoRWKV-1.5B'
+# model_id = 'beomi/KoRWKV-1.5B'
+gemini = ChatGoogleGenerativeAI(model='gemini-pro', temperature=0.0, google_api_key=os.getenv('GEMINI_API'))
 
-# HuggingFacePipeline 객체 생성
-llm = huggingface_hub.HuggingFaceHub(
-    repo_id=model_id, 
-    # device=0,               # -1: CPU(default), 0번 부터는 CUDA 디바이스 번호 지정시 GPU 사용하여 추론
-    task="text-generation", # 텍스트 생성
-    model_kwargs={"temperature": 0.0, 
-                #   "max_length": 64
-                  },
-)
+# # HuggingFacePipeline 객체 생성
+# llm = huggingface_hub.HuggingFaceHub(
+#     repo_id=model_id, 
+#     # device=0,               # -1: CPU(default), 0번 부터는 CUDA 디바이스 번호 지정시 GPU 사용하여 추론
+#     task="text-generation", # 텍스트 생성
+#     model_kwargs={"temperature": 0.0, 
+#                 #   "max_length": 64
+#                   },
+# )
 
 # 문서내용 추출 체인객체 생성
-ext_chain = create_extraction_chain(schema=schema, llm=llm)
+ext_chain = create_extraction_chain(schema=schema, llm=gemini)
 
 # 웹스크래핑 URL 정의
 urls = ["https://news.naver.com/section/105"]
