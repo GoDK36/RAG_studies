@@ -34,6 +34,9 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.memory import ConversationBufferMemory
 from langchain.memory import StreamlitChatMessageHistory
 
+# 프롬프트를 불러올 langsmith의 hub
+from langchain import hub
+
 
 # result = llm.invoke("gemini-pro를 활용한 챗봇 만드는 파이썬 코드 작성해줘")
 # print(result.content)
@@ -192,7 +195,7 @@ def get_text_chunks(text):
 
 def get_vectorstore(text_chunks):
 
-    model_name = "jhgan/ko-sroberta-multitask"
+    model_name = "BAAI/bge-m3"     # 2024.02.21 embedding model 변경(기존: jhgan/ko-sroberta-multitask)
     model_kwargs = {'device': 'cpu'}
     encode_kwargs = {'normalize_embeddings': True}
     hf = HuggingFaceEmbeddings(
