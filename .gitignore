@@ -5,3 +5,5 @@
 .env
 .pdf
 Applied Text Analysis with Python_English.pdf
+namuwiki-test_db/index.faiss
+namuwiki-test_db/index.pkl
